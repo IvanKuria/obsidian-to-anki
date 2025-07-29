@@ -37,8 +37,6 @@ jobs:
       - name: Run basic tests
         run: |
           python test_basic.py
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
 
       - name: Test CLI help
         run: |
