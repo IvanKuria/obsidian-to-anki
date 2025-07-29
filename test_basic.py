@@ -7,6 +7,7 @@ Run with: python test_basic.py
 import os
 import tempfile
 import unittest
+from unittest.mock import patch, MagicMock
 from parser import process_file, process_directory
 from card_generator import sanitize_card_output
 
@@ -55,11 +56,13 @@ This is a test note about algorithms.
                 
         except Exception as e:
             # If OpenAI API is not available, this is expected
-            if "OPENAI_API_KEY" in str(e) or "api_key" in str(e).lower() or "authentication" in str(e).lower():
+            error_str = str(e).lower()
+            if any(keyword in error_str for keyword in ["openai_api_key", "api_key", "authentication", "unauthorized", "invalid_api_key"]):
                 print("⚠️  Skipping test - OpenAI API key not configured")
                 self.skipTest("OpenAI API key not configured")
                 return
             else:
+                print(f"Unexpected error: {e}")
                 raise
     
     def test_sanitize_card_output(self):
@@ -106,10 +109,12 @@ This is a test note about algorithms.
             
         except Exception as e:
             # If it's an API key error, that's expected
-            if "OPENAI_API_KEY" in str(e) or "api_key" in str(e).lower() or "authentication" in str(e).lower():
+            error_str = str(e).lower()
+            if any(keyword in error_str for keyword in ["openai_api_key", "api_key", "authentication", "unauthorized", "invalid_api_key"]):
                 print("⚠️  Expected API key error - test passed")
                 self.skipTest("OpenAI API key not configured")
             else:
+                print(f"Unexpected error: {e}")
                 raise
         finally:
             os.unlink(temp_file.name)
@@ -126,6 +131,84 @@ This is a test note about algorithms.
             self.fail("CLI help command timed out")
         except FileNotFoundError:
             self.skipTest("main.py not found")
+    
+    def test_sanitize_function_works(self):
+        """Test that the sanitize function works independently of API."""
+        from card_generator import sanitize_card_output
+        
+        # Test with various input formats
+        test_cases = [
+            ("Question\tAnswer", "Question\tAnswer"),  # Already tab-separated
+            ("Question  Answer", "Question\tAnswer"),  # Double space
+            ("Question: Answer", "Question\tAnswer"),  # Colon separator
+            ("Q1\tA1\nQ2\tA2", "Q1\tA1\nQ2\tA2"),   # Multiple lines
+        ]
+        
+        for input_text, expected in test_cases:
+            result = sanitize_card_output(input_text)
+            self.assertIn('\t', result)
+            self.assertIn('Answer', result)
+    
+    @patch('card_generator.OpenAI')
+    def test_generate_card_content_with_mock(self, mock_openai):
+        """Test card generation with mocked OpenAI client."""
+        from card_generator import generate_card_content
+        
+        # Mock the OpenAI response
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "What is X?\tX is Y\nWhy use Z?\tZ is better"
+        
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai.return_value = mock_client
+        
+        # Test the function
+        result = generate_card_content("# Test Note\nThis is a test.")
+        
+        # Verify the result
+        self.assertIn('\t', result)
+        self.assertIn('What is X?', result)
+        self.assertIn('X is Y', result)
+    
+    def test_parser_functions(self):
+        """Test that parser utility functions work correctly."""
+        from parser import get_file_contents, write_to_file
+        
+        # Test get_file_contents
+        test_content = "# Test\nThis is a test file."
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(test_content)
+            temp_file_path = f.name
+        
+        try:
+            content = get_file_contents(temp_file_path)
+            self.assertEqual(content, test_content)
+        finally:
+            os.unlink(temp_file_path)
+        
+        # Test write_to_file
+        test_output = "Test output content"
+        output_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False)
+        output_file.close()
+        
+        try:
+            write_to_file(output_file.name, test_output, overwrite=True)
+            with open(output_file.name, 'r') as f:
+                content = f.read().strip()
+                self.assertEqual(content, test_output)
+        finally:
+            os.unlink(output_file.name)
+    
+    def test_basic_imports(self):
+        """Test that all modules can be imported without errors."""
+        try:
+            import main
+            import parser
+            import card_generator
+            self.assertTrue(True, "All modules imported successfully")
+        except ImportError as e:
+            self.fail(f"Failed to import module: {e}")
 
 if __name__ == '__main__':
     print("Running basic tests for Obsidian-to-Anki...")
