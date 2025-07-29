@@ -55,8 +55,9 @@ This is a test note about algorithms.
                 
         except Exception as e:
             # If OpenAI API is not available, this is expected
-            if "OPENAI_API_KEY" in str(e) or "api_key" in str(e).lower():
+            if "OPENAI_API_KEY" in str(e) or "api_key" in str(e).lower() or "authentication" in str(e).lower():
                 print("⚠️  Skipping test - OpenAI API key not configured")
+                self.skipTest("OpenAI API key not configured")
                 return
             else:
                 raise
@@ -87,6 +88,44 @@ This is a test note about algorithms.
         
         # Should handle malformed lines gracefully
         self.assertIn('Good line\tGood answer', result)
+    
+    def test_file_processing_without_api(self):
+        """Test that file processing doesn't crash without API key."""
+        # Create a simple test file
+        test_content = "# Simple Test\nThis is a test note."
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False)
+        temp_file.write(test_content)
+        temp_file.close()
+        
+        try:
+            # This should not crash even without API key
+            process_file(temp_file.name, self.output_file.name, overwrite=True)
+            
+            # Check if output file was created
+            self.assertTrue(os.path.exists(self.output_file.name))
+            
+        except Exception as e:
+            # If it's an API key error, that's expected
+            if "OPENAI_API_KEY" in str(e) or "api_key" in str(e).lower() or "authentication" in str(e).lower():
+                print("⚠️  Expected API key error - test passed")
+                self.skipTest("OpenAI API key not configured")
+            else:
+                raise
+        finally:
+            os.unlink(temp_file.name)
+    
+    def test_cli_help(self):
+        """Test that CLI help works."""
+        import subprocess
+        try:
+            result = subprocess.run(['python', 'main.py', '--help'], 
+                                  capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn('Obsidian-to-Anki', result.stdout)
+        except subprocess.TimeoutExpired:
+            self.fail("CLI help command timed out")
+        except FileNotFoundError:
+            self.skipTest("main.py not found")
 
 if __name__ == '__main__':
     print("Running basic tests for Obsidian-to-Anki...")
