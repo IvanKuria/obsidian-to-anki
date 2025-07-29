@@ -4,6 +4,31 @@ from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+tab = "\t"
+
+# def sanitize_card_output(raw_output: str) -> str:
+#     cleaned_lines = []
+#
+#     for line in raw_output.strip().split("\n"):
+#         line = line.strip()
+#         if not line:
+#             continue
+#
+#         # If it's already tab-separated
+#         if "\t" in line:
+#             cleaned_lines.append(line)
+#             continue
+#
+#         # Try splitting using a regex: Question [whitespace] Answer
+#         split = re.split(r"\s{2,}|\t|:\s+", line, maxsplit=1)
+#
+#         if len(split) == 2:
+#             question, answer = split
+#             cleaned_lines.append(f"{question.strip()}\t{answer.strip()}")
+#         else:
+#             print(f"⚠️ Skipping malformed line: {line}")
+#
+#     return "\n".join(cleaned_lines)
 
 def generate_card_content(file_content):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -16,22 +41,33 @@ def generate_card_content(file_content):
             },
             {
                 "role": "user",
-                "content": f'''
-                You are a world-class Anki flashcard creator that helps students create flashcards that help them remember facts, concepts, and ideas from files. You will be given a file's content.
-                1. Identify key high-level concepts and ideas presented, including relevant equations. If the file is math or physics-heavy, focus on concepts. If the file isn't heavy on concepts, focus on facts.
-                2. Then use your own knowledge of the concept, ideas, or facts to flesh out any additional details (eg, relevant facts, dates, and equations) to ensure the flashcards are self-contained.
-                3. Make question-answer cards based on the file.
-                4. Keep the questions and answers roughly in the same order as they appear in the file itself.
-                
-                Output Format,
-                - Do not have the first row being "Question" and "Answer".
-                - The file will be imported into Anki. You should include each flashcard on a new line and use the pipe separator | to separate the question and answer. You should return a .txt file for me to download.
-                - When writing math, wrap any math with the \( ... \) tags [eg, \( a^2+b^2=c^2 \) ] . By default this is inline math. For block math, use \[ ... \]. Decide when formatting each card.
-                - Put everything in a code block.
-                
-                MESSAGE TO PROCESS:
-                {file_content}
-                '''
+                "content": f"""
+                        You are an expert in helping programmers study technical notes using Anki flashcards.
+                        
+                        Given a markdown note (usually from a coding problem or concept explanation), extract the key ideas and transform them into 2–6 high-quality flashcards.
+                        
+                        Each flashcard should be in the following format:
+                        
+                        Front{tab}Back
+                        
+                        Where:
+                        - “Front” contains a clear question or prompt
+                        - “Back” contains the answer or explanation
+                        - Code snippets can be included in the back if they clarify the answer
+                        - Do not reference "this note" or "this markdown" in the card text
+                        - Replace this format with the actual front and back separated by a **real tab**, not the word "tab"
+                        - Don't reference 'Front' or 'Back' these are just placeholders for the actual front and back. It must be on one line
+                        - The 'Front' and 'Back' content needs to be on one line separated by {tab}
+                        
+                        Also:
+                        - Avoid making cards that only ask for definitions
+                        - Prioritize cards that test: how/why something works, edge cases, time complexity, and common mistakes
+                        
+                        Output only the flashcards, no explanation. Each card on its own line.
+                        
+                        Here is the markdown note:
+                        {file_content}
+                    """
             }
         ]
     )
